@@ -1381,6 +1381,9 @@ S2.define('select2/selection/base',[
     var resultsId = container.id + '-results';
     var searchHidden = this.options.get('minimumResultsForSearch') === Infinity;
 
+    var aria_id = container.id.substring( 8, container.id.length );
+    var aria_label = $( "label[for='" + aria_id + "']" ).html();
+
     this.container = container;
 
     this.$selection.on('focus', function (evt) {
@@ -1540,12 +1543,18 @@ S2.define('select2/selection/single',[
     SingleSelection.__super__.bind.apply(this, arguments);
 
     var id = container.id + '-container';
+    var aria_id = container.id.substring( 8, container.id.length );
+    var aria_label = $( "label[for='" + aria_id + "']" ).html();
+
+    //have label for screen reader
+    var aria_value = '<span id="' + aria_id + '_selected_value" class="sr-only" hidden>' + aria_label + '</span>';
+    $("#" + aria_id).parent().prepend( aria_value );
 
     this.$selection.find('.select2-selection__rendered')
       .attr('id', id)
       .attr('role', 'textbox')
       .attr('aria-readonly', 'true');
-    this.$selection.attr('aria-labelledby', id);
+    this.$selection.attr('aria-labelledby', ( aria_id + "_selected_value" ));
 
     // This makes single non-search selects work in screen readers. If it causes problems elsewhere, remove.
     this.$selection.attr('role', 'combobox');
@@ -1567,8 +1576,8 @@ S2.define('select2/selection/single',[
 
     this.$selection.on('keydown', function (evt) {
       // If user starts typing an alphanumeric key on the keyboard, open if not opened.
-      if (!container.isOpen() && evt.which >= 48 && evt.which <= 90) {
-        container.open();
+      if (!container.isOpen() && evt.which >= 48 && evt.which <= 90 ) {
+            container.open();
       }
     });
 
@@ -1582,7 +1591,7 @@ S2.define('select2/selection/single',[
       }
     });
 
-    container.on('selection:update', function (params) {
+    container.on('selection:update', function (params){
       self.update(params.data);
     });
   };
@@ -1648,6 +1657,16 @@ S2.define('select2/selection/multiple',[
 
     MultipleSelection.__super__.bind.apply(this, arguments);
 
+    var id = container.id + '-container';
+    var aria_id = container.id.substring( 8, container.id.length );
+    var aria_label = $( "label[for='" + aria_id + "']" ).html();
+
+    this.$selection.attr('aria-labelledby', ( aria_id + "_selected_value" ));
+
+    //have label for screen reader
+    var aria_value = '<span id="' + aria_id + '_selected_value" class="sr-only" hidden>' + aria_label + '</span>';
+    $("#" + aria_id).parent().prepend( aria_value );
+
     this.$selection.on('click', function (evt) {
       self.trigger('toggle', {
         originalEvent: evt
@@ -1672,6 +1691,30 @@ S2.define('select2/selection/multiple',[
           originalEvent: evt,
           data: data
         });
+      }
+    );
+
+    this.$selection.on(
+      'keydown',
+      '.select2-selection__choice__remove',
+      function (evt) {
+        // Ignore the event if it is disabled
+        if (self.options.get('disabled')) {
+          return;
+        }
+
+        if ( evt.which == 13 || evt.which == 32 )
+        {
+            var $remove = $(this);
+            var $selection = $remove.parent();
+
+            var data = $selection.data('data');
+
+            self.trigger('unselect', {
+                originalEvent: evt,
+                data: data
+                });
+        }
       }
     );
 
@@ -1702,9 +1745,9 @@ S2.define('select2/selection/multiple',[
   MultipleSelection.prototype.selectionContainer = function () {
     var $container = $(
       '<li class="select2-selection__choice">' +
-        '<span class="select2-selection__choice__remove" role="presentation" aria-hidden="true">' +
+        '<a href="javascript:void(0);" class="select2-selection__choice__remove" tabindex="0" aria-label="Deselect: " >' +
           '&times;' +
-        '</span>' +
+        '</a>' +
       '</li>'
     );
 
@@ -1746,6 +1789,9 @@ S2.define('select2/selection/multiple',[
 
       $selection.append(formatted);
       $selection.prop('title', selection.title || selection.text);
+      $selection.prop('aria-label', "Selected Item: " + (selection.title || selection.text) );
+
+      $selection.find('a').attr( 'aria-label', "Deselect: " + ( selection.title || selection.text));
 
       $selection.data('data', selection);
 
@@ -1838,6 +1884,10 @@ S2.define('select2/selection/allowClear',[
     container.on('keypress', function (evt) {
       self._handleKeyboardClear(evt, container);
     });
+
+    this.$selection.on('focusout', '.select2-selection__clear', function (evt) {
+      self._handleBlur(evt);
+    });
   };
 
   AllowClear.prototype._handleClear = function (_, evt) {
@@ -1885,6 +1935,11 @@ S2.define('select2/selection/allowClear',[
     if (evt.which == KEYS.DELETE || evt.which == KEYS.BACKSPACE) {
       this._handleClear(evt);
     }
+
+    if ( (evt.which == KEYS.ENTER || evt.which == KEYS.SPACE ) && $('.select2-selection__clear').is( ':focus') )
+    {
+        this._handleClear(evt)
+    }
   };
 
   AllowClear.prototype.update = function (decorated, data) {
@@ -1896,9 +1951,9 @@ S2.define('select2/selection/allowClear',[
     }
 
     var $remove = $(
-      '<span class="select2-selection__clear">' +
+      '<a href="javascript:void(0);" class="select2-selection__clear" tabindex="0" aria-label="Deselect ' + this.$selection.find("span").html() + '">' +
         '&times;' +
-      '</span>'
+      '</a>'
     );
     $remove.data('data', data);
 
